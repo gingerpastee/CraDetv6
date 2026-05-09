@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "978971602171",
+    "firebase_url": "https://cardat-1d7d3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "cardat-1d7d3",
+    "storage_bucket": "cardat-1d7d3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:978971602171:android:13ef228d070c9b020ed45e",
+        "android_client_info": {
+          "package_name": "com.example.cradet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNEWBbAeN0VQ5pDAssb-usQKDxAHiFnm4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
