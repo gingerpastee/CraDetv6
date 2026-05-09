@@ -28,7 +28,7 @@
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyD58HfuI2rc-Vn1DT1ln3ocjGdMhXOiszo" />
+            android:value="APIkey" />
 
         <service
             android:name=".MonitoringService"
