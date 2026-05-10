@@ -13,3 +13,4 @@ When a possible accident is detected, Cradet immediately activates a 20-second e
 
 APK FILE LINK: https://github.com/gingerpastee/CraDetv6/invitations
 WEBSITE/DASHBOARD LINK: https://cradetv3.onrender.com/
+DEMO VIDEO LINK: https://youtu.be/Gph9slBnYnU
