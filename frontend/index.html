@@ -1,0 +1,305 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CraDet Monitoring Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+      "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
+    }
+  }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">🛡️</div>
+      <div class="brand-text">
+        <h1>CraDet</h1>
+        <p>Monitoring Dashboard</p>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-link active" href="#overviewSection">Overview</a>
+      <a class="nav-link" href="#healthSection">Health</a>
+      <a class="nav-link" href="#analyticsSection">Analytics</a>
+      <a class="nav-link" href="#locationSection">Location</a>
+      <a class="nav-link" href="#alertsSection">Alerts</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span>Prepared for future backend & real-time integration.</span>
+    </div>
+  </aside>
+
+  <div class="dashboard-frame">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-badge">Realtime Emergency Monitoring</div>
+        <h1>CraDet Dashboard</h1>
+        <p>Professional monitoring interface for relatives and emergency response teams.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-simulate" id="simulateBtn" onclick="simulateAccident()">Generate Sample Alert</button>
+        <button class="btn-reset" id="resetBtn" onclick="resetSystem()">Reset Dashboard</button>
+      </div>
+    </header>
+
+    <section id="overviewSection" class="summary-grid">
+      <article class="card overview-card status-overview">
+        <div class="overview-card-header">
+          <div>
+            <p class="overview-card-title">User Status</p>
+            <span class="overview-card-subtitle">Current monitored user</span>
+          </div>
+          <span class="badge status-pill" id="patientCondition">Stable</span>
+        </div>
+        <div class="overview-metrics">
+          <div class="metric-item"><span>User</span><strong id="patientName">Aarav Sharma</strong></div>
+          <div class="metric-item"><span>Email</span><strong id="patientEmail">user@example.com</strong></div>
+          <div class="metric-item"><span>Phone</span><strong id="patientPhone">N/A</strong></div>
+          <div class="metric-item"><span>Blood Type</span><strong id="patientBloodType">O</strong></div>
+          <div class="metric-item"><span>Status</span><strong id="patientConditionDetail">Normal</strong></div>
+          <div class="metric-item"><span>Last Update</span><strong id="lastUpdated">--:--:--</strong></div>
+        </div>
+      </article>
+
+      <article class="card overview-card alert-overview">
+        <div class="overview-card-header">
+          <div>
+            <p class="overview-card-title">Accident Alert</p>
+            <span class="overview-card-subtitle">Sample detection flow</span>
+          </div>
+          <span class="badge alert-pill" id="alertSeverity">No Active Alert</span>
+        </div>
+        <div class="overview-metrics">
+          <div class="metric-item"><span>Status</span><strong id="alertStatusText">Monitoring</strong></div>
+          <div class="metric-item"><span>Severity</span><strong id="alertSeverityText">Low</strong></div>
+          <div class="metric-item"><span>Countdown</span><strong id="alertCountdown">20s</strong></div>
+          <div class="metric-item"><span>Emergency Status</span><strong id="emergencyStatus">Awaiting event</strong></div>
+        </div>
+      </article>
+
+      <article class="card overview-card hospital-overview">
+        <div class="overview-card-header">
+          <div>
+            <p class="overview-card-title">Blood Availability</p>
+            <span class="overview-card-subtitle">Nearest hospital blood bank</span>
+          </div>
+          <span class="badge info-pill">Updated</span>
+        </div>
+        <div class="overview-metrics">
+          <div class="metric-item"><span>A+ Blood</span><strong id="aPlusBlood">15 units (6750 mL)</strong></div>
+          <div class="metric-item"><span>B+ Blood</span><strong id="bPlusBlood">12 units (5400 mL)</strong></div>
+          <div class="metric-item"><span>O+ Blood</span><strong id="oPlusBlood">20 units (9000 mL)</strong></div>
+          <div class="metric-item"><span>AB+ Blood</span><strong id="abPlusBlood">8 units (3600 mL)</strong></div>
+        </div>
+      </article>
+
+      <article class="card overview-card location-overview">
+        <div class="overview-card-header">
+          <div>
+            <p class="overview-card-title">Live Location</p>
+            <span class="overview-card-subtitle">Device GPS status</span>
+          </div>
+          <span class="badge info-pill" id="locationStatus">Active</span>
+        </div>
+        <div class="overview-metrics">
+          <div class="metric-item"><span>Current</span><strong id="currentLocation">Fetching…</strong></div>
+          <div class="metric-item"><span>Last Active</span><strong id="lastLocation">--</strong></div>
+          <div class="metric-item"><span>Coordinates</span><strong id="mapCoordinates">--</strong></div>
+          <div class="metric-item"><span>Map Status</span><strong><a id="mapsLink" href="#" target="_blank">Open Map</a></strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="analyticsSection" class="analytics-grid">
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">❤️</span>
+          <h2>Heartbeat</h2>
+        </div>
+        <canvas id="heartbeatChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">🩸</span>
+          <h2>SpO₂ Trend</h2>
+        </div>
+        <canvas id="spo2Chart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">⚡</span>
+          <h2>Stress Level</h2>
+        </div>
+        <canvas id="stressChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">💓</span>
+          <h2>Blood Pressure</h2>
+        </div>
+        <canvas id="bpChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">🚶</span>
+          <h2>Movement Intensity</h2>
+        </div>
+        <canvas id="movementChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header">
+          <span class="card-icon">💥</span>
+          <h2>Impact Profile</h2>
+        </div>
+        <canvas id="impactChart"></canvas>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <div class="main-column">
+        <div id="healthSection" class="card health-grid">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <h2>Biological Monitoring</h2>
+          </div>
+          <div class="grid grid-3">
+            <div class="health-card">
+              <div class="health-icon">💓</div>
+              <div class="health-label">Heart Rate</div>
+              <div class="health-value" id="heartRate">72</div>
+              <div class="health-unit">BPM</div>
+              <div class="health-bar-track"><div class="health-bar green" id="heartBar" style="width:55%"></div></div>
+              <div class="health-range">Normal: 60–100</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">🫁</div>
+              <div class="health-label">Blood Oxygen</div>
+              <div class="health-value" id="spo2">98</div>
+              <div class="health-unit">%</div>
+              <div class="health-bar-track"><div class="health-bar blue" id="spo2Bar" style="width:98%"></div></div>
+              <div class="health-range">Normal: 95–100</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">🧠</div>
+              <div class="health-label">Stress Level</div>
+              <div class="health-value" id="stressLevel">Low</div>
+              <div class="health-unit">Status</div>
+              <div class="health-bar-track"><div class="health-bar orange" id="stressBar" style="width:22%"></div></div>
+              <div class="health-range">Realtime trend</div>
+            </div>
+          </div>
+          <div class="grid grid-3" style="margin-top:20px;">
+            <div class="health-card">
+              <div class="health-icon">🌡️</div>
+              <div class="health-label">Body Temperature</div>
+              <div class="health-value" id="bodyTemp">98.4</div>
+              <div class="health-unit">°F</div>
+              <div class="health-bar-track"><div class="health-bar green" id="tempBar" style="width:60%"></div></div>
+              <div class="health-range">Normal: 97–99°F</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">💨</div>
+              <div class="health-label">Breathing Rate</div>
+              <div class="health-value" id="breathingRate">16</div>
+              <div class="health-unit">RPM</div>
+              <div class="health-bar-track"><div class="health-bar blue" id="breathingBar" style="width:40%"></div></div>
+              <div class="health-range">Normal: 12–20 RPM</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">📦</div>
+              <div class="health-label">Movement</div>
+              <div class="health-value" id="movementIntensity">0.3</div>
+              <div class="health-unit">G</div>
+              <div class="health-bar-track"><div class="health-bar orange" id="movementBar" style="width:12%"></div></div>
+              <div class="health-range">Live motion</div>
+            </div>
+          </div>
+          <div class="grid grid-3" style="margin-top:20px; gap: 14px;">
+            <div class="health-card">
+              <div class="health-icon">📡</div>
+              <div class="health-label">Accelerometer</div>
+              <div class="health-value" id="accelerometerMagnitude">--</div>
+              <div class="health-unit">m/s²</div>
+              <div class="health-bar-track"><div class="health-bar blue" id="accelerometerBar" style="width:0%"></div></div>
+              <div class="health-range">X/Y/Z live values</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">🧭</div>
+              <div class="health-label">Gyroscope</div>
+              <div class="health-value" id="gyroscopeMagnitude">--</div>
+              <div class="health-unit">rad/s</div>
+              <div class="health-bar-track"><div class="health-bar orange" id="gyroscopeBar" style="width:0%"></div></div>
+              <div class="health-range">X/Y/Z live values</div>
+            </div>
+            <div class="health-card">
+              <div class="health-icon">💥</div>
+              <div class="health-label">Crash Force</div>
+              <div class="health-value" id="crashGForce">0.00</div>
+              <div class="health-unit">G</div>
+              <div class="health-bar-track"><div class="health-bar orange" id="crashForceBar" style="width:0%"></div></div>
+              <div class="health-range">Realtime collision force</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="alertsSection" class="card alerts-card">
+          <div class="card-header">
+            <span class="card-icon">🚨</span>
+            <h2>Live Alerts & Notifications</h2>
+          </div>
+          <div class="alerts-list" id="liveAlertsList">
+            <div class="alert-pill-card">No alerts generated yet. Use Generate Sample Alert to simulate an incident.</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="sidebar-column">
+        <div id="locationSection" class="card map-card">
+          <div class="card-header">
+            <span class="card-icon">🗺️</span>
+            <h2>Location Monitoring</h2>
+          </div>
+          <p class="map-text">Live location placeholder for future backend GPS route display.</p>
+          <div class="map-tile">
+            <div class="map-placeholder">Map placeholder / route overlay</div>
+          </div>
+          <div class="grid grid-2" style="margin-top:18px; gap: 14px;">
+            <div class="location-summary"><span>Status</span><strong id="locationCardStatus">Active</strong></div>
+            <div class="location-summary"><span>Route</span><strong id="routeStatus">Pending</strong></div>
+            <div class="location-summary"><span>Signal</span><strong id="watchRssi">-- dBm</strong></div>
+          </div>
+        </div>
+
+        <div class="card hospital-card">
+          <div class="card-header">
+            <span class="card-icon">🏥</span>
+            <h2>Hospital Beds</h2>
+          </div>
+          <p class="map-text">Bed availability in emergency departments.</p>
+          <div class="grid grid-2" style="margin-top:18px; gap: 14px;">
+            <div class="location-summary"><span>Emergency Ward</span><strong id="emergencyWardStatus">8 beds free</strong></div>
+            <div class="location-summary"><span>Accident Care</span><strong id="accidentCareStatus">5 beds free</strong></div>
+            <div class="location-summary"><span>ICU</span><strong id="icuStatus">2 beds free</strong></div>
+            <div class="location-summary"><span>Total Available</span><strong id="totalBedsStatus">15 beds</strong></div>
+          </div>
+          <div class="ambulance-footnote">Backend-ready placeholder for real hospital bed data integration.</div>
+        </div>
+
+
+      </aside>
+    </section>
+
+    <footer class="footer">CraDet © 2026 · Frontend monitoring dashboard | Backend-ready placeholder app</footer>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

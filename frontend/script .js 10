@@ -1,0 +1,755 @@
+/* =============================================
+   SafeGuard – Accident Detection Dashboard
+   script.js | Vanilla JavaScript Logic
+   ============================================= */
+
+// ---- Global State ----
+let isAccidentMode = false;    // tracks if accident is triggered
+let normalInterval = null;     // interval for normal sensor updates
+let healthInterval = null;     // interval for health data updates
+let locationInterval = null;   // interval for continuous location updates
+let emergencyTimer = null;     // countdown timer handle
+let countdownValue = 20;       // seconds until SMS alert fires
+
+const USERS_STORAGE_KEY = 'safeGuardUsers';
+const SESSION_STORAGE_KEY = 'safeGuardSession';
+let currentUser = null;
+let alertEvents = [];
+let currentLocationData = null;
+let lastActiveLocationData = null;
+
+// ---- Utility: format current time ----
+function getCurrentTime() {
+  return new Date().toLocaleTimeString('en-IN', { hour12: true });
+}
+
+// ---- Authentication Helpers ----
+function getUsers() {
+  const stored = localStorage.getItem(USERS_STORAGE_KEY);
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+}
+
+function getCurrentUser() {
+  const email = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!email) return null;
+  return getUsers().find((user) => user.email === email) || null;
+}
+
+function saveUserData(user) {
+  const users = getUsers();
+  const index = users.findIndex((item) => item.email === user.email);
+  if (index === -1) {
+    users.push(user);
+  } else {
+    users[index] = user;
+  }
+  saveUsers(users);
+}
+
+function setSession(email) {
+  localStorage.setItem(SESSION_STORAGE_KEY, email);
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function requireLogin() {
+  currentUser = getCurrentUser();
+  if (!currentUser) {
+    window.location.href = 'login.html';
+  }
+}
+
+function logoutUser() {
+  clearSession();
+  window.location.href = 'login.html';
+}
+
+function renderDashboardUser() {
+  if (!currentUser) return;
+  const userNameEl = document.getElementById('userName');
+  const userPhoneEl = document.getElementById('userPhone');
+  if (userNameEl) userNameEl.textContent = currentUser.fullName || currentUser.email;
+  if (userPhoneEl) userPhoneEl.textContent = currentUser.phone || '—';
+}
+
+function showAuthMessage(message, error = false) {
+  const messageEl = document.getElementById('authMessage');
+  if (!messageEl) return;
+  messageEl.textContent = message;
+  messageEl.style.color = error ? '#b91c1c' : '#155e75';
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password = document.getElementById('loginPassword').value.trim();
+  if (!email || !password) {
+    showAuthMessage('Please enter both email and password.', true);
+    return;
+  }
+  const user = getUsers().find((item) => item.email === email && item.password === password);
+  if (!user) {
+    showAuthMessage('Invalid email or password.', true);
+    return;
+  }
+  setSession(user.email);
+  window.location.href = 'index.html';
+}
+
+function handleSignup(event) {
+  event.preventDefault();
+  const fullName = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+  const password = document.getElementById('signupPassword').value.trim();
+  const phone = document.getElementById('signupPhone').value.trim();
+
+  if (!fullName || !email || !password || !phone) {
+    showAuthMessage('Please complete all signup fields.', true);
+    return;
+  }
+
+  const users = getUsers();
+  if (users.some((item) => item.email === email)) {
+    showAuthMessage('A user with that email already exists.', true);
+    return;
+  }
+
+  const newUser = {
+    fullName,
+    email,
+    password,
+    phone,
+    contacts: [],
+  };
+  saveUserData(newUser);
+  showAuthMessage('Signup successful! Redirecting to login...', false);
+  setTimeout(() => {
+    window.location.href = 'login.html';
+  }, 1200);
+}
+
+function handleForgotPassword(event) {
+  event.preventDefault();
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+  const password = document.getElementById('forgotPassword').value.trim();
+  const confirmPassword = document.getElementById('forgotConfirmPassword').value.trim();
+
+  if (!email || !password || !confirmPassword) {
+    showAuthMessage('Please complete all fields.', true);
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showAuthMessage('Passwords do not match.', true);
+    return;
+  }
+
+  const users = getUsers();
+  const user = users.find((item) => item.email === email);
+  if (!user) {
+    showAuthMessage('Email not found. Please check and try again.', true);
+    return;
+  }
+
+  user.password = password;
+  saveUserData(user);
+  showAuthMessage('Password updated. Redirecting to login...', false);
+  setTimeout(() => {
+    window.location.href = 'login.html';
+  }, 1200);
+}
+
+/* ============================================
+   Emergency Contacts + Location Helpers
+   ============================================ */
+function getSavedContacts() {
+  if (!currentUser) return [];
+  return currentUser.contacts || [];
+}
+
+function saveContacts(contacts) {
+  if (!currentUser) return;
+  currentUser.contacts = contacts;
+  saveUserData(currentUser);
+}
+
+function renderContacts() {
+  const list = document.getElementById('contactsList');
+  if (!list) return;
+
+  const emergencyContacts = getSavedContacts();
+  if (!emergencyContacts.length) {
+    list.innerHTML = '<div class="contact-placeholder">No emergency contacts saved yet.</div>';
+    return;
+  }
+
+  list.innerHTML = emergencyContacts.map((contact, index) => {
+    return `
+      <div class="contact-item">
+        <div class="contact-meta">
+          <span class="contact-name">${contact.name}</span>
+          <span class="contact-phone">${contact.phone}</span>
+          <span class="contact-relationship">${contact.relationship}</span>
+        </div>
+        <button class="contact-remove" type="button" onclick="removeContact(${index})">Remove</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function showContactMessage(message, error = false) {
+  const note = document.getElementById('contactMessage');
+  if (!note) return;
+  note.textContent = message;
+  note.style.color = error ? '#b91c1c' : '#155e75';
+}
+
+function addContact(event) {
+  event.preventDefault();
+  const nameInput = document.getElementById('contactName');
+  const phoneInput = document.getElementById('contactPhone');
+  const relationInput = document.getElementById('contactRelationship');
+  const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
+  const relationship = relationInput ? relationInput.value.trim() : '';
+
+  if (!name || !phone || !relationship) {
+    showContactMessage('Please enter name, phone number, and relationship.', true);
+    return;
+  }
+
+  const emergencyContacts = getSavedContacts();
+  if (emergencyContacts.length >= 5) {
+    showContactMessage('You can only save up to 5 emergency contacts.', true);
+    return;
+  }
+
+  const phonePattern = /^\+?[0-9\s-]{6,}$/;
+  if (!phonePattern.test(phone)) {
+    showContactMessage('Please enter a valid phone number.', true);
+    return;
+  }
+
+  emergencyContacts.push({ name, phone, relationship });
+  saveContacts(emergencyContacts);
+  renderContacts();
+  nameInput.value = '';
+  phoneInput.value = '';
+  if (relationInput) relationInput.value = '';
+  showContactMessage('Contact saved successfully.');
+}
+
+function removeContact(index) {
+  const emergencyContacts = getSavedContacts();
+  emergencyContacts.splice(index, 1);
+  saveContacts(emergencyContacts);
+  renderContacts();
+}
+
+function formatLocation(location) {
+  if (!location) return '--';
+  return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
+}
+
+function renderLocationCards() {
+  const current = document.getElementById('currentLocation');
+  const last = document.getElementById('lastLocation');
+  const mapsLink = document.getElementById('mapsLink');
+
+  if (current) {
+    current.textContent = currentLocationData ? formatLocation(currentLocationData) : 'Waiting for location...';
+  }
+
+  const locationVal = document.getElementById('locationVal');
+  if (locationVal) {
+    locationVal.textContent = currentLocationData ? formatLocation(currentLocationData) : 'Waiting for location...';
+  }
+
+  if (last) {
+    last.textContent = lastActiveLocationData ? formatLocation(lastActiveLocationData) : 'Not recorded yet';
+  }
+
+  if (mapsLink) {
+    if (currentLocationData) {
+      mapsLink.href = `https://maps.google.com/?q=${currentLocationData.latitude},${currentLocationData.longitude}`;
+      mapsLink.target = '_blank';
+    } else {
+      mapsLink.href = '#';
+    }
+  }
+}
+
+function fetchCurrentLocation() {
+  if (!navigator.geolocation) {
+    const current = document.getElementById('currentLocation');
+    if (current) current.textContent = 'Geolocation not supported';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+      if (currentLocationData) {
+        lastActiveLocationData = currentLocationData;
+      }
+      if (!lastActiveLocationData) {
+        lastActiveLocationData = { latitude, longitude };
+      }
+      currentLocationData = { latitude, longitude };
+      renderLocationCards();
+    },
+    () => {
+      const current = document.getElementById('currentLocation');
+      if (current) current.textContent = 'Location permission denied';
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function toggleCountdownOverlay(show) {
+  const overlay = document.getElementById('countdownOverlay');
+  if (!overlay) return;
+  overlay.classList.toggle('show', show);
+}
+
+function updateCountdownDisplay() {
+  const timer = document.getElementById('countdownTimer');
+  if (timer) timer.textContent = countdownValue;
+}
+
+function buildSmsUrl(contact, message) {
+  if (!contact || !contact.phone || !message) return '';
+  const sanitizedPhone = contact.phone.replace(/[^0-9+]/g, '');
+  const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const separator = isIos ? '&body=' : '?body=';
+  return `sms:${sanitizedPhone}${separator}${encodeURIComponent(message)}`;
+}
+
+function sendSmsIntent(contact, message) {
+  const smsUrl = buildSmsUrl(contact, message);
+  if (!smsUrl) return;
+  window.location.href = smsUrl;
+}
+
+function openEmergencySmsIntent() {
+  const emergencyContacts = getSavedContacts();
+  if (!emergencyContacts.length) return;
+  const contact = emergencyContacts[0];
+  const location = currentLocationData || lastActiveLocationData;
+  const mapUrl = location ? `https://maps.google.com/?q=${location.latitude},${location.longitude}` : 'Location not available';
+  const message = `Emergency Alert!\nA possible accident has been detected for ${currentUser ? currentUser.fullName : 'the user'}.\n\nLast Active Location:\n${mapUrl}\n\nPlease check immediately.`;
+  sendSmsIntent(contact, message);
+}
+
+function startEmergencyCountdown() {
+  if (emergencyTimer) return;
+  countdownValue = 20;
+  updateCountdownDisplay();
+  toggleCountdownOverlay(true);
+
+  emergencyTimer = setInterval(() => {
+    countdownValue -= 1;
+    updateCountdownDisplay();
+    if (countdownValue <= 0) {
+      clearInterval(emergencyTimer);
+      emergencyTimer = null;
+      toggleCountdownOverlay(false);
+      triggerEmergencySMS();
+    }
+  }, 1000);
+}
+
+function cancelEmergencyAlert() {
+  if (emergencyTimer) {
+    clearInterval(emergencyTimer);
+    emergencyTimer = null;
+  }
+  toggleCountdownOverlay(false);
+  resetSystem();
+}
+
+function triggerEmergencySMS() {
+  const emergencyContacts = getSavedContacts();
+  createAlertEvents();
+  triggerAccidentAlert();
+
+  // Send an SMS intent to the first contact if the browser/device supports it.
+  if (emergencyContacts.length && currentUser) {
+    const location = currentLocationData || lastActiveLocationData;
+    const mapUrl = location ? `https://maps.google.com/?q=${location.latitude},${location.longitude}` : '';
+    const message = `Emergency Alert!\nA possible accident has been detected for ${currentUser.fullName}.\n\nLast Active Location:\n${mapUrl}\n\nPlease check immediately.`;
+    sendSmsIntent(emergencyContacts[0], message);
+  }
+}
+
+function createAlertEvents() {
+  const emergencyContacts = getSavedContacts();
+  const location = currentLocationData || lastActiveLocationData;
+  const mapUrl = location ? `https://maps.google.com/?q=${location.latitude},${location.longitude}` : 'Location not available';
+
+  alertEvents = emergencyContacts.map((contact) => {
+    const message = `Emergency Alert!\nA possible accident has been detected for ${currentUser ? currentUser.fullName : 'the user'}.\n\nLast Active Location:\n${location ? mapUrl : 'Location not available'}\n\nPlease check immediately.`;
+    const smsUrl = location ? `sms:${contact.phone}?body=${encodeURIComponent(message)}` : '#';
+    return {
+      name: contact.name,
+      phone: contact.phone,
+      status: 'SMS delivered',
+      timestamp: new Date().toLocaleString('en-IN', { hour12: true }),
+      message,
+      mapUrl,
+      smsUrl,
+    };
+  });
+
+  if (!alertEvents.length) {
+    alertEvents = [{
+      name: 'No contacts available',
+      phone: '—',
+      status: 'No alerts sent',
+      timestamp: getCurrentTime(),
+      message: 'Add emergency contacts to generate alert simulations.',
+      mapUrl: '#',
+    }];
+  }
+
+  renderAlertStatus();
+}
+
+function renderAlertStatus() {
+  const container = document.getElementById('alertStatusList');
+  if (!container) return;
+
+  if (!alertEvents.length) {
+    container.innerHTML = '<div class="alert-placeholder">No alerts generated yet.</div>';
+    return;
+  }
+
+  container.innerHTML = alertEvents.map((event) => `
+    <div class="alert-card">
+      <div class="alert-status-label"><strong>${event.status}</strong> · ${event.timestamp}</div>
+      <p><strong>${event.name}</strong><br />${event.phone}</p>
+      <p>${event.message.replace(/\n/g, '<br />')}</p>
+      ${event.mapUrl !== '#' ? `<a href="${event.mapUrl}" target="_blank" class="maps-link">View location</a>` : ''}
+      ${event.smsUrl && event.smsUrl !== '#' ? `<a href="${event.smsUrl}" class="maps-link">Open SMS</a>` : ''}
+    </div>
+  `).join('');
+}
+
+// ---- Utility: random float in a range ----
+function rand(min, max) {
+  return (Math.random() * (max - min) + min).toFixed(2);
+}
+
+// ---- Update clock on status card ----
+function updateClock() {
+  const el = document.getElementById('lastUpdated');
+  if (el) el.textContent = getCurrentTime();
+}
+
+/* ============================================
+   NORMAL SENSOR SIMULATION
+   Updates accelerometer with gentle fluctuations
+   ============================================ */
+function updateNormalSensors() {
+  if (isAccidentMode) return;
+
+  // Small idle motion – like carrying a phone normally
+  const x = parseFloat(rand(-0.5, 0.5));
+  const y = parseFloat(rand(-0.3, 0.3));
+  const z = parseFloat((9.8 + parseFloat(rand(-0.2, 0.2))).toFixed(2));
+  const intensity = parseFloat(rand(0.1, 0.3));
+
+  displaySensorValues(x, y, z, intensity);
+  updateClock();
+}
+
+/* ============================================
+   DISPLAY SENSOR VALUES + PROGRESS BARS
+   ============================================ */
+function displaySensorValues(x, y, z, intensity) {
+  document.getElementById('axisX').textContent = x.toFixed(2);
+  document.getElementById('axisY').textContent = y.toFixed(2);
+  document.getElementById('axisZ').textContent = z.toFixed(2);
+  document.getElementById('intensity').textContent = intensity.toFixed(2);
+
+  // Bars: scale each axis as % of max expected (50 m/s² max for crash)
+  const maxVal = 50;
+  document.getElementById('barX').style.width = Math.min(Math.abs(x) / maxVal * 100, 100) + '%';
+  document.getElementById('barY').style.width = Math.min(Math.abs(y) / maxVal * 100, 100) + '%';
+  document.getElementById('barZ').style.width = Math.min(Math.abs(z) / maxVal * 100, 100) + '%';
+  document.getElementById('barIntensity').style.width = Math.min(intensity / 5 * 100, 100) + '%';
+
+  // Intensity badge label
+  const badge = document.getElementById('intensityBadge');
+  if (intensity < 0.5) {
+    badge.textContent = 'Low Intensity';
+    badge.className = 'badge';
+  } else if (intensity < 1.5) {
+    badge.textContent = 'Moderate Intensity';
+    badge.className = 'badge warn';
+  } else {
+    badge.textContent = '⚠️ High Intensity';
+    badge.className = 'badge alert';
+  }
+}
+
+/* ============================================
+   HEALTH DATA SIMULATION
+   Gentle fluctuation in heart rate, SpO2, stress
+   ============================================ */
+function updateHealthData() {
+  if (isAccidentMode) {
+    // Elevated values after an accident
+    const hr = Math.floor(Math.random() * 20 + 100); // 100–120 BPM (elevated)
+    const spo2 = Math.floor(Math.random() * 3 + 93); // 93–96% (slightly low)
+    document.getElementById('heartRate').textContent = hr;
+    document.getElementById('spo2').textContent = spo2;
+    document.getElementById('heartBar').style.width = Math.min((hr / 180) * 100, 100) + '%';
+    document.getElementById('spo2Bar').style.width = spo2 + '%';
+    document.getElementById('stressLevel').textContent = 'High';
+    document.getElementById('stressBar').style.width = '85%';
+    return;
+  }
+
+  // Normal resting values with tiny fluctuation
+  const hr = Math.floor(Math.random() * 10 + 68);       // 68–78 BPM
+  const spo2 = Math.floor(Math.random() * 3 + 97);      // 97–99%
+  const stressVal = Math.floor(Math.random() * 15 + 10); // 10–25%
+
+  document.getElementById('heartRate').textContent = hr;
+  document.getElementById('spo2').textContent = spo2;
+  document.getElementById('heartBar').style.width = Math.min((hr / 130) * 100, 100) + '%';
+  document.getElementById('spo2Bar').style.width = spo2 + '%';
+  document.getElementById('stressBar').style.width = stressVal + '%';
+
+  const stressLabel = stressVal < 20 ? 'Low' : stressVal < 40 ? 'Moderate' : 'High';
+  document.getElementById('stressLevel').textContent = stressLabel;
+}
+
+/* ============================================
+   SIMULATE ACCIDENT
+   Spikes sensor values, shakes phone, shows alert
+   ============================================ */
+function simulateAccident() {
+  if (isAccidentMode) return; // prevent double-trigger
+  isAccidentMode = true;
+  fetchCurrentLocation(true);
+
+  // Disable simulate button
+  const simBtn = document.getElementById('simulateBtn');
+  simBtn.disabled = true;
+  simBtn.textContent = '⚠️ Detecting Accident...';
+
+  // ---- 1. Show phone shaking ----
+  const phone = document.getElementById('phoneModel');
+  phone.classList.remove('stopped');
+  phone.classList.add('shaking');
+  document.getElementById('phoneLabel').textContent = '⚠️ Impact Detected!';
+  startEmergencyCountdown();
+
+  // ---- 2. Spike sensor values (simulated crash) ----
+  let step = 0;
+  const crashInterval = setInterval(() => {
+    step++;
+    const factor = Math.max(0, 1.2 - step * 0.15); // values taper off
+    const x = parseFloat((Math.random() * 40 * factor - 20).toFixed(2));
+    const y = parseFloat((Math.random() * 35 * factor - 17).toFixed(2));
+    const z = parseFloat((Math.random() * 45 * factor).toFixed(2));
+    const intensity = parseFloat((Math.random() * 4 * factor + 0.5).toFixed(2));
+    displaySensorValues(x, y, z, intensity);
+
+    if (step >= 8) {
+      clearInterval(crashInterval);
+      // ---- 3. Phone tilts after impact ----
+      phone.classList.remove('shaking');
+      phone.classList.add('stopped');
+      document.getElementById('phoneLabel').textContent = '🛑 Device Stopped – Impact Logged';
+
+      // ---- 4. Keep countdown visible while alert timer runs ----
+      if (!emergencyTimer) {
+        startEmergencyCountdown();
+      }
+    }
+  }, 120); // rapid updates during crash
+}
+
+/* ============================================
+   TRIGGER ACCIDENT ALERT UI
+   Updates cards, banner, and shows modal
+   ============================================ */
+function triggerAccidentAlert() {
+  const now = getCurrentTime();
+
+  // Status card turns red
+  document.getElementById('statusCard').classList.add('danger');
+  document.getElementById('statusBadge').classList.add('alert-mode');
+  document.getElementById('statusDot').classList.add('danger');
+  document.getElementById('statusText').textContent = '⚠️ Possible Accident Detected';
+  document.getElementById('lastUpdated').textContent = now;
+
+  // Header dot turns red
+  document.getElementById('headerDot').className = 'dot danger';
+  document.getElementById('systemStatus').textContent = '⚠️ Accident Alert';
+
+  // Show yellow alert banner at top
+  document.getElementById('alertBanner').classList.add('show');
+
+  // Show modal with emergency info
+  const modalLocation = document.getElementById('modalLocation');
+  const modalContacts = document.getElementById('modalContacts');
+  if (modalLocation) {
+    modalLocation.textContent = currentLocationData ? formatLocation(currentLocationData) : 'Location not available';
+  }
+  const contacts = getSavedContacts();
+  if (modalContacts) {
+    modalContacts.textContent = contacts.length ? contacts.map((item) => `${item.name} (${item.phone})`).join(', ') : 'No saved contacts';
+  }
+  const smsButton = document.getElementById('modalSmsBtn');
+  if (smsButton) {
+    if (contacts.length) {
+      const location = currentLocationData || lastActiveLocationData;
+      const mapUrl = location ? `https://maps.google.com/?q=${location.latitude},${location.longitude}` : 'Location not available';
+      const message = `Emergency Alert!\nA possible accident has been detected for ${currentUser ? currentUser.fullName : 'the user'}.\n\nLast Active Location:\n${mapUrl}\n\nPlease check immediately.`;
+      smsButton.href = buildSmsUrl(contacts[0], message) || '#';
+      smsButton.style.display = 'inline-block';
+    } else {
+      smsButton.href = '#';
+      smsButton.style.display = 'none';
+    }
+  }
+  document.getElementById('modalTime').textContent = now;
+  document.getElementById('modalOverlay').classList.add('show');
+
+  // Show reset button
+  document.getElementById('resetBtn').style.display = 'inline-block';
+}
+
+/* ============================================
+   DISMISS TOP ALERT BANNER
+   ============================================ */
+function dismissAlert() {
+  document.getElementById('alertBanner').classList.remove('show');
+}
+
+/* ============================================
+   CLOSE MODAL
+   ============================================ */
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+/* ============================================
+   RESET SYSTEM
+   Returns everything to normal state
+   ============================================ */
+function resetSystem() {
+  isAccidentMode = false;
+
+  // Reset phone animation
+  const phone = document.getElementById('phoneModel');
+  phone.classList.remove('shaking', 'stopped');
+  document.getElementById('phoneLabel').textContent = 'Idle – Normal Motion';
+
+  // Reset status card
+  document.getElementById('statusCard').classList.remove('danger');
+  document.getElementById('statusBadge').classList.remove('alert-mode');
+  document.getElementById('statusDot').classList.remove('danger');
+  document.getElementById('statusText').textContent = 'Normal – Monitoring';
+
+  // Reset header
+  document.getElementById('headerDot').className = 'dot active';
+  document.getElementById('systemStatus').textContent = 'System Active';
+
+  // Hide banner & modal
+  dismissAlert();
+  closeModal();
+  toggleCountdownOverlay(false);
+  if (emergencyTimer) {
+    clearInterval(emergencyTimer);
+    emergencyTimer = null;
+  }
+
+  // Reset simulate button
+  const simBtn = document.getElementById('simulateBtn');
+  simBtn.disabled = false;
+  simBtn.textContent = '🚨 Simulate Accident';
+
+  // Hide reset button
+  document.getElementById('resetBtn').style.display = 'none';
+
+  // Reset sensors to normal
+  displaySensorValues(0, 0, 9.8, 0.2);
+  updateHealthData();
+}
+
+/* ============================================
+   START ALL INTERVALS ON PAGE LOAD
+   ============================================ */
+function init() {
+  const loginForm = document.getElementById('loginForm');
+  const signupForm = document.getElementById('signupForm');
+  const forgotForm = document.getElementById('forgotForm');
+  const dashboardRoot = document.getElementById('simulateBtn');
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      window.location.href = 'index.html';
+    }
+    return;
+  }
+
+  if (signupForm) {
+    signupForm.addEventListener('submit', handleSignup);
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      window.location.href = 'index.html';
+    }
+    return;
+  }
+
+  if (forgotForm) {
+    forgotForm.addEventListener('submit', handleForgotPassword);
+    return;
+  }
+
+  if (dashboardRoot) {
+    requireLogin();
+    renderDashboardUser();
+
+    const form = document.getElementById('contactForm');
+    if (form) form.addEventListener('submit', addContact);
+
+    // Normal sensors update every 1.5 seconds
+    normalInterval = setInterval(updateNormalSensors, 1500);
+
+    // Health data updates every 3 seconds
+    healthInterval = setInterval(updateHealthData, 3000);
+
+    // Location updates every 15 seconds while the dashboard is open
+    fetchCurrentLocation();
+    locationInterval = setInterval(fetchCurrentLocation, 15000);
+
+    // Load saved contacts and alert state
+    renderContacts();
+    renderAlertStatus();
+
+    // Initial values
+    updateNormalSensors();
+    updateHealthData();
+  }
+}
+
+// Run on load
+window.addEventListener('load', init);

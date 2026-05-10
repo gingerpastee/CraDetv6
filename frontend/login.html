@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CraDet – Login</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+      "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🛡️</span>
+        <span class="logo-text">CraDet</span>
+      </div>
+      <div class="header-status">
+        <span class="dot active"></span>
+        <span>Login</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="auth-container">
+    <div class="auth-card">
+      <h2>Welcome Back</h2>
+      <p>Sign in to access your CraDet dashboard, manage emergency contacts, and simulate accident alerts.</p>
+      <form id="loginForm" class="auth-form">
+        <label for="loginEmail">Email Address</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" required />
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter your password" required />
+        <div id="authMessage" class="auth-message"></div>
+        <button type="submit" class="auth-button">Login</button>
+      </form>
+      <div class="auth-footer">
+        <span>Don't have an account? <a href="signup.html" class="auth-link">Sign up</a></span>
+      </div>
+      <div class="auth-footer">
+        <a href="forgot.html" class="auth-link">Forgot password?</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>CraDet © 2025 · Simple frontend authentication demo</p>
+  </footer>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

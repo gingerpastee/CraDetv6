@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CraDet – Reset Password</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+      "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🛡️</span>
+        <span class="logo-text">CraDet</span>
+      </div>
+      <div class="header-status">
+        <span class="dot active"></span>
+        <span>Reset Password</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="auth-container">
+    <div class="auth-card">
+      <h2>Reset Your Password</h2>
+      <p>Enter the email registered with your CraDet account and choose a new password.</p>
+      <form id="forgotForm" class="auth-form">
+        <label for="forgotEmail">Email Address</label>
+        <input type="email" id="forgotEmail" placeholder="you@example.com" required />
+        <label for="forgotPassword">New Password</label>
+        <input type="password" id="forgotPassword" placeholder="Enter new password" required />
+        <label for="forgotConfirmPassword">Confirm Password</label>
+        <input type="password" id="forgotConfirmPassword" placeholder="Confirm new password" required />
+        <div id="authMessage" class="auth-message"></div>
+        <button type="submit" class="auth-button">Reset Password</button>
+      </form>
+      <div class="auth-footer">
+        <span>Remember your password? <a href="login.html" class="auth-link">Login</a></span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>CraDet © 2025 · Simple frontend authentication demo</p>
+  </footer>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
